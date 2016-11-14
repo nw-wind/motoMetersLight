@@ -1,2 +1,2 @@
-# motoMetersLight
-Moto Meters light based on one ATMega328.
+# motoMetersLite
+Moto Meters lite based on one ATMega328.
