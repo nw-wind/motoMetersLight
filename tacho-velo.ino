@@ -57,14 +57,18 @@ static const unsigned long rpmMinTick=30000*1000000/60;  // Минимальны
 static const unsigned long rpmMaxTick=100*1000000/60;    // Максимальный тик
 static const unsigned int rpmDivide=1;      // Умножить для коррекции 
 static const unsigned int rpmMultiply=1;    // Разделить для коррекции
+const unsigned long rpmDelay=1*100*1000; // 0.1 sec
+smartDelay rpmUpdate(rpmDelay);
 
 //  Спидометр
 volatile unsigned long velo;
 volatile unsigned long veloTick;
 const unsigned long veloMin= 1* 100000;
 const unsigned long veloMax=80*1000000;
-const unsigned float veloDiameter=21;
-const unsigned float veloLength=veloDiameter*2.54/100*3.1416f;
+const float veloDiameter=21;
+const float veloLength=veloDiameter*2.54/100*3.1416f;
+const unsigned long veloDelay=1*100*1000; // 0.1 sec
+smartDelay veloUpdate(veloDelay);
 
 // Дисплей
 static const unsigned long dispDelay=1*1000*1000; // Microseconds
@@ -78,15 +82,8 @@ void intTacho() {
 
 void intVelo() {
   unsigned long mcs=micros();
-  if (mcs-veloTick>veloMax) {
-    velo=0;
-  } else {
-    if (mcs-veloTick<veloMin) {
-      // ничего
-    } else {
-      velo=(veloLength/1000)/((mcs-veloTick)/1000000);
-      veloTick=mcs;
-    }
+  if ((mcs-veloTick)>veloMin) {
+    veloTick=mcs;
   }
 }
 
@@ -96,7 +93,21 @@ void setup() {
 }
 
 void loop() {
+  unsigned long mcs;
   
+  // Вычислить обороты
+  if (rpmUpdate.Now()) {
+    mcs=micros();
+    // вычисляем обороты
+  }
+  // Вычислить скорость
+  if (veloUpdate.Now()) {
+    mcs=micros();
+    if ((mcs-veloTick)>veloMin && (mcs-veloTick)<veloMax) {
+      velo=(veloLength/1000)/((mcs-veloTick)/1000000);
+    } 
+    if ((mcs-veloTick)>veloMax) velo=0;
+  }
   // Показать на дисплее
   if (dispUpdate.Now()) {
     // Отрисовать дисплей
