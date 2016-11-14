@@ -45,6 +45,8 @@ unsigned long smartDelay::Set(unsigned long tick) {
 }
 // end of Smart Delay class definition
 
+static char buf[128];
+
 // Тахометр
 // Количество тиков для усреднения
 #define RPMTICKS 8
@@ -58,6 +60,7 @@ static const unsigned long rpmMaxTick=100*1000000/60;    // Максимальн
 static const unsigned int rpmDivide=1;      // Умножить для коррекции 
 static const unsigned int rpmMultiply=1;    // Разделить для коррекции
 const unsigned long rpmDelay=1*100*1000; // 0.1 sec
+const int rpmPin=3;
 smartDelay rpmUpdate(rpmDelay);
 
 //  Спидометр
@@ -68,6 +71,7 @@ const unsigned long veloMax=80*1000000;
 const float veloDiameter=21;
 const float veloLength=veloDiameter*2.54/100*3.1416f;
 const unsigned long veloDelay=1*100*1000; // 0.1 sec
+const int veloPin=2;
 smartDelay veloUpdate(veloDelay);
 
 // Дисплей
@@ -88,8 +92,10 @@ void intVelo() {
 }
 
 void setup() {
-  
-
+  digitalWrite(veloPin,HIGH); // pull up
+  pinMode(veloPin,INPUT);
+  pinMode(rpmPin,INPUT);
+  Serial.begin(9600);
 }
 
 void loop() {
@@ -111,5 +117,7 @@ void loop() {
   // Показать на дисплее
   if (dispUpdate.Now()) {
     // Отрисовать дисплей
+    sprintf(buf,"v=%d r=%d",velo,rpm)
+    Serial.println(buf);
   }
 }
