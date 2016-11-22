@@ -1,8 +1,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_PCF8574.h>
 #include <RTCx.h>
-
-LiquidCrystal_PCF8574 lcd(0x27);
+#include "FM24I2C.h"
 
 /* 
  * Тахометр 
@@ -56,9 +55,11 @@ const unsigned long maxLong=4294967295;
 
 // Тахометр
 // Количество тиков для усреднения
-#define RPMTICKS 8
+#define RPMTICKS 30
 volatile unsigned long rpm;                             // Обороты в минуту для отображения
-volatile unsigned long rpmTicks[RPMTICKS];              // Отсчёты для усреднения
+volatile unsigned long rpmDist;
+static unsigned long rpmTicks[RPMTICKS];              // Отсчёты для усреднения
+volatile int rpmTick=0;
 // minTick < Интервал между прерываниями < maxTick
 // Меньше: тик пропускается (многоискровое зажигание)
 // Больше: rpm=0;
@@ -85,12 +86,16 @@ smartDelay veloUpdate(veloDelay);
 static const unsigned long dispDelay=1*1000000UL; // Microseconds
 smartDelay dispUpdate(dispDelay);
 static byte displayColon=0;
+const int displayAddress=0x27;
+LiquidCrystal_PCF8574 lcd(displayAddress);
+static byte displayOK=0;
 
 // Одометр
 static unsigned long odo;
 
 // Температура
 static int temp;
+static byte tempOK=0;
 
 // Моточасы
 static unsigned int motoHours;
@@ -100,14 +105,22 @@ static unsigned long motoMillis;
 const unsigned long motoDelay=1*60*1000000L;
 smartDelay motoUpdate(motoDelay);
 
+// FRAM
+const int framAddress=0x57;
+FM24I2C fram(framAddress);
+static byte framOK=0;
+
+// RTC
+static byte rtcOK=0;
+
 // Прерывания
 
 void intRpm() {
   unsigned long mcs=micros();
   //sprintf(buf,"Rpm tick: %ld ",mcs-rpmTicks[0]);
   //Serial.println(buf);
-  if ((mcs-rpmTicks[0])>rpmMin) {
-    rpmTicks[0]=mcs;
+  if ((mcs-rpmDist)>rpmMin) {
+    rpmDist=mcs;
     //Serial.println("Good rpm tick");
   }
 }
@@ -123,29 +136,6 @@ void intVelo() {
   }
 }
 
-void setup() {
-  pinMode(veloPin,INPUT);
-  pinMode(rpmPin,INPUT);
-  digitalWrite(veloPin,HIGH); // pull up
-  digitalWrite(rpmPin,HIGH);   // pull down
-  Serial.begin(9600);
-  attachInterrupt(digitalPinToInterrupt(rpmPin),intRpm,RISING);
-  attachInterrupt(digitalPinToInterrupt(veloPin),intVelo,FALLING);
-
-  lcd.begin(16, 2);
-  lcd.setBacklight(200);
-  lcd.noCursor();
-  lcd.home(); 
-  lcd.clear();
-
-  uint8_t addressList[] = {RTCx::MCP7941xAddress, RTCx::DS1307Address};
-  rtc.autoprobe(addressList, sizeof(addressList));
-  rtc.enableBatteryBackup();
-  rtc.startClock();
-  
-  Serial.println("Ready");
-}
-
 // printAt()
 #include <stdarg.h>
 #define PRINTF_BUF 21
@@ -153,58 +143,106 @@ void printAt(int c, int r, char *s, ...) {
   char buf[PRINTF_BUF];
   va_list ap;
   va_start(ap, s);
-  lcd.setCursor(c,r);
-  vsnprintf(buf, sizeof(buf), s, ap);
-  lcd.print(buf); 
+  if (displayOK) {
+    lcd.setCursor(c,r);
+    vsnprintf(buf, sizeof(buf), s, ap);
+    lcd.print(buf); 
+  }
   va_end(ap);
+}
+
+void setup() {
+  Wire.begin();
+  Serial.begin(9600);
+  
+  pinMode(veloPin,INPUT_PULLUP);
+  pinMode(rpmPin,INPUT_PULLUP);
+  //digitalWrite(veloPin,HIGH); // pull up
+  //digitalWrite(rpmPin,HIGH);   // pull down
+  Serial.begin(9600);
+  attachInterrupt(digitalPinToInterrupt(rpmPin),intRpm,RISING);
+  attachInterrupt(digitalPinToInterrupt(veloPin),intVelo,FALLING);
+
+  Wire.beginTransmission(displayAddress);
+  if (Wire.endTransmission(true) == 0) {
+    displayOK=true;
+  } else {
+    displayOK=false;
+  }
+
+  if (displayOK) {
+    lcd.begin(16, 2);
+    lcd.setBacklight(200);
+    lcd.noCursor();
+    lcd.home(); 
+    lcd.clear();
+    printAt(0,0,"%16s","DISPLAY OK");
+  }
+  delay(2000);
+
+  // Добавить в класс!
+  Wire.beginTransmission(framAddress);
+  if (Wire.endTransmission(true) == 0) {
+    framOK=true;
+    printAt(0,0,"%16s","FRAM OK");
+  } else {
+    framOK=false;
+    printAt(0,0,"%16s","FRAM ERROR");
+  }
+ 
+  delay(2000);
+
+  uint8_t addressList[] = {RTCx::MCP7941xAddress, RTCx::DS1307Address};
+  if (rtc.autoprobe(addressList, sizeof(addressList))) {
+    rtc.enableBatteryBackup();
+    rtc.startClock();
+    rtcOK=true;
+    printAt(0,0,"%16s","RTC OK");
+  } else {
+    printAt(0,0,"%16s","RTC ERROR");
+  }
+  delay(2000);
+  if (displayOK) lcd.clear();
+  Serial.println("Ready");
 }
 
 void displayClock() {
   struct RTCx::tm tm;
   char buf[17];
-  // Читать часы
-  rtc.readClock(tm);
-  // Вывести их
-  sprintf(buf,"%02d%s%02d",tm.tm_hour,(displayColon?":":" "),tm.tm_min,tm.tm_sec);
-  lcd.setCursor(11, 1);
-  lcd.print(buf);
-  displayColon=(displayColon+1)%2;
+  if (rtcOK) {
+    // Читать часы
+    rtc.readClock(tm);
+    // Вывести их
+    sprintf(buf,"%02d%s%02d",tm.tm_hour,(displayColon?":":" "),tm.tm_min,tm.tm_sec);
+    lcd.setCursor(11, 1);
+    lcd.print(buf);
+    displayColon=(displayColon+1)%2;
+  }
 }
 
 void displaySpeed() {
-  char buf[17];
-  sprintf(buf,"%3d",velo);
-  lcd.setCursor(0, 0);
-  lcd.print(buf);
+  printAt(0,0,"%3d",velo);
 }
 
 void displayRpm() {
-  char buf[17];
-  sprintf(buf,"%5d",rpm);
-  lcd.setCursor(4, 0);
-  lcd.print(buf);
+  printAt(4,0,"%5d",rpm);
 }
 
 void displayOdo() {
-  char buf[17];
-  sprintf(buf,"%6ld",odo/1000000L);
-  lcd.setCursor(10, 0);
-  lcd.print(buf);
+  if (framOK) {
+    printAt(10,0,"%6ld",odo/1000000L);
+  }
 }
 
 void displayTemp() {
-  char buf[17];
   int t=(temp>0?temp:0);
-  sprintf(buf,"%3d",t);
-  lcd.setCursor(0, 1);
-  lcd.print(buf);
+  if (tempOK) {
+    printAt(0,1,"%3d",t);
+  }
 }
 
 void displayMH() {
-  char buf[17];
-  sprintf(buf,"%3u:%02u",motoHours,motoMinutes);
-  lcd.setCursor(4, 1);
-  lcd.print(buf);
+  printAt(4,1,"%3u:%02u",motoHours,motoMinutes);
 }
 
 void loop() {
@@ -213,23 +251,31 @@ void loop() {
   // Вычислить обороты
   if (rpmUpdate.Now()) {
     // вычисляем обороты
-    if ((mcs-rpmTicks[0])>rpmMin && (mcs-rpmTicks[0])<rpmMax) {
-      rpm=1000000UL*60/(mcs-rpmTicks[0]);
-      sprintf(buf,"Good rpm tick: %ld %ld",mcs-rpmTicks[0],rpm);
+    unsigned long rd=rpmDist;
+    if ((mcs-rd)>rpmMin && (mcs-rd)<rpmMax) {
+      rpmTicks[rpmTick]=1000000UL*60/(mcs-rd);
+      sprintf(buf,"Good rpm tick: %ld %ld",mcs-rpmTicks[rpmTick],rpm);
       Serial.println(buf);
     } 
-    if ((mcs-rpmTicks[0])>rpmMax) { 
-      rpm=0;
+    if ((mcs-rd)>rpmMax) { 
+      rpmTicks[rpmTick]=0;
     }
+    rpm=0;
+    for (int i=0; i<RPMTICKS; i++) {
+      rpm+=rpmTicks[i];
+    }
+    rpm/=RPMTICKS;
+    rpmTick=(rpmTick+1)%RPMTICKS;
   }
   // Вычислить скорость
   if (veloUpdate.Now()) {
-    if ((mcs-veloTick)>veloMin && (mcs-veloTick)<veloMax) {
-      velo=(veloLength/1000.0f/1000.0f)/((mcs-veloTick)/1000000.0f/3600.0f);
+    unsigned long vt=veloTick;
+    if ((mcs-vt)>veloMin && (mcs-vt)<veloMax) {
+      velo=(veloLength/1000.0f/1000.0f)/((mcs-vt)/1000000.0f/3600.0f);
       //sprintf(buf,"Good velo tick: %ld %ld %d",mcs-veloTick,velo,((mcs-veloTick)>veloMax));
       //Serial.println(buf);
     } 
-    if ((mcs-veloTick)>veloMax) velo=0;
+    if ((mcs-vt)>veloMax) velo=0;
   }
   // Моточасы
   if (motoUpdate.Now()) {
