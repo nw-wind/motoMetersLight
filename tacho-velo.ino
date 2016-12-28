@@ -6,7 +6,7 @@
 /* 
  * Тахометр 
  * Спидометр
- * Одометр с сохранением в ЕЕПРОМ
+ * Одометр с сохранением в FRAM
  * Одометр (с сохранением) со сбросом
  * Средняя скорость
  * Средняя скорость с учётом остановок
@@ -57,7 +57,7 @@ const unsigned long maxLong=4294967295;
 // Количество тиков для усреднения
 //#define RPMTICKS 30
 static unsigned long rpm;                             // Обороты в минуту для отображения
-volatile unsigned long rpmDist;
+static unsigned long rpmDist;
 //static unsigned long rpmTicks[RPMTICKS];              // Отсчёты для усреднения
 volatile int rpmTick=0;
 // minTick < Интервал между прерываниями < maxTick
@@ -68,7 +68,7 @@ static const unsigned long rpmMax=1000000*60UL/100;    // Максимальны
 static const unsigned int rpmDivide=1;      // Умножить для коррекции 
 static const unsigned int rpmMultiply=1;    // Разделить для коррекции
 const unsigned long rpmDelay=1*100*1000UL; // 0.1 sec
-const int rpmPin=3;
+const int rpmPin=3; // pin 3
 smartDelay rpmUpdate(rpmDelay);
 
 //  Спидометр
@@ -79,7 +79,7 @@ const unsigned long veloMax= 1*1000000UL;
 const float veloDiameter=21;
 const float veloLength=veloDiameter*25.4*3.1416f;
 const unsigned long veloDelay=1*100*1000UL; // 0.1 sec
-const int veloPin=2;
+const int veloPin=2; // pin 2
 smartDelay veloUpdate(veloDelay);
 
 // Дисплей
@@ -116,7 +116,7 @@ static byte rtcOK=0;
 // Прерывания
 
 void intRpm() {
-  unsigned long mcs=micros();
+  //unsigned long mcs=micros();
   //sprintf(buf,"Rpm tick: %ld ",mcs-rpmTicks[0]);
   //Serial.println(buf);
   //if ((mcs-rpmDist)>rpmMin) {
@@ -248,12 +248,9 @@ void displayMH() {
   printAt(4,1,"%3u:%02u",motoHours,motoMinutes);
 }
 
-void loop() {
-  unsigned long mcs=micros();;
-  
-  // Вычислить обороты
-  if (rpmUpdate.Now()) {
-    // вычисляем обороты
+int CalcRPM() {
+  unsigned long mcs=micros();
+     // вычисляем обороты
     /*
     unsigned long rd=rpmDist;
     if ((mcs-rd)>rpmMin && (mcs-rd)<rpmMax) {
@@ -271,12 +268,24 @@ void loop() {
     rpm/=RPMTICKS;
     rpmTick=(rpmTick+1)%RPMTICKS;
     */
+    
     /// TODO:
     // Добавить минимальное и максимальное.
-    rpm=1000000L*60L/((mcs-rpmDist)/rpmTick);
-    rpmTick=0;
-    rpmDist=mcs;
-  }
+    if (rpmTick > 0) {
+      rpm=1000000L*60L/((mcs-rpmDist)/rpmTick);
+      rpmTick=0;
+      rpmDist=mcs;
+    } else {
+      rpm=0;
+    } 
+  return rpm;
+}
+
+void loop() {
+  unsigned long mcs=micros();
+  
+  // Вычислить обороты
+  if (rpmUpdate.Now()) rpm=CalcRPM();
   // Вычислить скорость
   if (veloUpdate.Now()) {
     unsigned long vt=veloTick;
