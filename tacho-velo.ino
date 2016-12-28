@@ -123,6 +123,8 @@ void intRpm() {
   //  rpmDist=mcs;
     //Serial.println("Good rpm tick");
   //}
+  
+  /// TODO если не слишком быстро...
   rpmTick++;
 }
 
