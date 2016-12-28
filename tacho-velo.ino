@@ -55,10 +55,10 @@ const unsigned long maxLong=4294967295;
 
 // Тахометр
 // Количество тиков для усреднения
-#define RPMTICKS 30
-volatile unsigned long rpm;                             // Обороты в минуту для отображения
+//#define RPMTICKS 30
+static unsigned long rpm;                             // Обороты в минуту для отображения
 volatile unsigned long rpmDist;
-static unsigned long rpmTicks[RPMTICKS];              // Отсчёты для усреднения
+//static unsigned long rpmTicks[RPMTICKS];              // Отсчёты для усреднения
 volatile int rpmTick=0;
 // minTick < Интервал между прерываниями < maxTick
 // Меньше: тик пропускается (многоискровое зажигание)
@@ -119,10 +119,11 @@ void intRpm() {
   unsigned long mcs=micros();
   //sprintf(buf,"Rpm tick: %ld ",mcs-rpmTicks[0]);
   //Serial.println(buf);
-  if ((mcs-rpmDist)>rpmMin) {
-    rpmDist=mcs;
+  //if ((mcs-rpmDist)>rpmMin) {
+  //  rpmDist=mcs;
     //Serial.println("Good rpm tick");
-  }
+  //}
+  rpmTick++;
 }
 
 void intVelo() {
@@ -251,6 +252,7 @@ void loop() {
   // Вычислить обороты
   if (rpmUpdate.Now()) {
     // вычисляем обороты
+    /*
     unsigned long rd=rpmDist;
     if ((mcs-rd)>rpmMin && (mcs-rd)<rpmMax) {
       rpmTicks[rpmTick]=1000000UL*60/(mcs-rd);
@@ -266,6 +268,10 @@ void loop() {
     }
     rpm/=RPMTICKS;
     rpmTick=(rpmTick+1)%RPMTICKS;
+    */
+    /// TODO:
+    // Добавить минимальное и максимальное.
+    rpm=1000000L*60L/((mcs-rpmDist)/rpmTick);
   }
   // Вычислить скорость
   if (veloUpdate.Now()) {
