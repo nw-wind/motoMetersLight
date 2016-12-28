@@ -162,7 +162,7 @@ void setup() {
   //digitalWrite(rpmPin,HIGH);   // pull down
   Serial.begin(9600);
   attachInterrupt(digitalPinToInterrupt(rpmPin),intRpm,RISING);
-  attachInterrupt(digitalPinToInterrupt(veloPin),intVelo,FALLING);
+  attachInterrupt(digitalPinToInterrupt(veloPin),intVelo,RISING);
 
   Wire.beginTransmission(displayAddress);
   if (Wire.endTransmission(true) == 0) {
