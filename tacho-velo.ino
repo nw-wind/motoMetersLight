@@ -272,6 +272,8 @@ void loop() {
     /// TODO:
     // Добавить минимальное и максимальное.
     rpm=1000000L*60L/((mcs-rpmDist)/rpmTick);
+    rpmTick=0;
+    rpmDist=mcs;
   }
   // Вычислить скорость
   if (veloUpdate.Now()) {
