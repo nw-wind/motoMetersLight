@@ -60,6 +60,7 @@ static unsigned long rpm;                             // Обороты в ми�
 static unsigned long rpmDist;
 //static unsigned long rpmTicks[RPMTICKS];              // Отсчёты для усреднения
 volatile int rpmTick=0;
+volatile unsigned long rpmMicros=0;
 // minTick < Интервал между прерываниями < maxTick
 // Меньше: тик пропускается (многоискровое зажигание)
 // Больше: rpm=0;
@@ -126,6 +127,7 @@ void intRpm() {
   
   /// TODO если не слишком быстро...
   rpmTick++;
+  rpmMircos=micros();
 }
 
 void intVelo() {
@@ -249,7 +251,7 @@ void displayMH() {
 }
 
 int CalcRPM() {
-  unsigned long mcs=micros();
+  //unsigned long mcs=micros();
      // вычисляем обороты
     /*
     unsigned long rd=rpmDist;
@@ -272,9 +274,9 @@ int CalcRPM() {
     /// TODO:
     // Добавить минимальное и максимальное.
     if (rpmTick > 0) {
-      rpm=1000000L*60L/((mcs-rpmDist)/rpmTick);
+      rpm=1000000L*60L/((rpmMicros-rpmDist)/rpmTick);
       rpmTick=0;
-      rpmDist=mcs;
+      rpmDist=rpmMicros;
     } else {
       rpm=0;
     } 
