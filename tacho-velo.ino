@@ -127,7 +127,7 @@ void intRpm() {
   
   /// TODO если не слишком быстро...
   rpmTick++;
-  rpmMircos=micros();
+  rpmMicros=micros();
 }
 
 void intVelo() {
@@ -144,7 +144,7 @@ void intVelo() {
 // printAt()
 #include <stdarg.h>
 #define PRINTF_BUF 21
-void printAt(int c, int r, char *s, ...) {
+void printAt(int c, int r, const char *s, ...) {
   char buf[PRINTF_BUF];
   va_list ap;
   va_start(ap, s);
